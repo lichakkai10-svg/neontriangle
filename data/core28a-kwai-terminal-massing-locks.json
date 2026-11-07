@@ -1,0 +1,34 @@
+{
+  "project": "neon-triangle",
+  "id": "core28a-kwai-terminal-massing-locks",
+  "updated": "2026-11-07T18:10:00+08:00",
+  "for_version": "core28a",
+  "priority": "P0",
+  "industrial_envelope_bbox": {
+    "x": [
+      -3243.0,
+      -154.4
+    ],
+    "z": [
+      -1161.0,
+      1161.0
+    ],
+    "note_zh": "連續工廈牆包圍；禁被 estate cull 吞掉 kt_ind_block／OSM extrude"
+  },
+  "hub_local_ind_wall": {
+    "keep": "kt_ind_block*",
+    "cull_ban": [
+      "building",
+      "extrude",
+      "grid",
+      "facade_block",
+      "osm_bld"
+    ],
+    "estate_clear_m": 200
+  },
+  "align_bake_layer": "industrial_envelope",
+  "align_docs": [
+    "docs/core28a-kwai-terminal-massing-locks.md",
+    "docs/core28a-kwai-access-elevated-locks.md"
+  ]
+}

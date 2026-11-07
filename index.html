@@ -320,6 +320,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 /* TIP_MARK geometry-fail knife · after b5e0865 · pier-first / defer-kenney · keep ?v=core28 */
 /* TIP_MARK paint-fail · tractor chase back halfLen+5.5 / CAM 12.5 · rear door detail · keep ?v=core28 */
 /* TIP_MARK room2-rev8 · STS on look-ray (ndc) + chase hold · keep ?v=core28 */
+/* TIP_MARK room2-boss-p0-collide-cont-bld-story · collide+cont off-road+bld cull+BootGeneric · keep ?v=core28 */
 const ASSET_BASE = 'assets/';
 const ASSET_FILES = {
   car: 'concept-car.glb',          // 開局黑色跑車：Khronos CarConcept（CC-BY 4.0；已去標誌／減面）；後備 kenney-sedan-sports.glb
@@ -456,18 +457,23 @@ function kwBldBlocksElbowSpawn(aabb, cx, cz) {
 }
 /** rev3：清蓋住肘 spawn 嘅 colliders（OSM 機構樓 AABB maxX≈-1193 → 東推到 -1192） */
 function kwPurgeCollidersNearElbowSpawn() {
+  /* boss-p0：只清 spawn 腳下矮／細 prop——禁洗閘／地磅／櫃／樓碰撞（穿模根因） */
   if (typeof colliders === 'undefined' || !colliders || typeof kwSpawnElbowGatePose !== 'function') return 0;
   const pose = kwSpawnElbowGatePose();
-  const pad = 12;
+  const pad = 6;
   let n = 0;
   for (let i = colliders.length - 1; i >= 0; i--) {
     const c = colliders[i];
     if (!c || c.maxY < 0.55) continue;
-    if (pose.x + pad < c.minX || pose.x - pad > c.maxX || pose.z + pad < c.minZ || pose.z - pad > c.maxZ) continue;
+    if (c.maxY >= 2.4) continue; /* 保留樓／櫃／閘／地磅 */
+    const hw = (c.maxX - c.minX) * 0.5, hd = (c.maxZ - c.minZ) * 0.5;
+    if (hw > 3.2 || hd > 3.2) continue; /* 大 footprint 留低 */
+    const cx = (c.minX + c.maxX) * 0.5, cz = (c.minZ + c.maxZ) * 0.5;
+    if (Math.hypot(cx - pose.x, cz - pose.z) > pad) continue;
     colliders.splice(i, 1);
     n++;
   }
-  if (n) console.info('[kwai] purge spawn colliders', n);
+  if (n) console.info('[kwai] purge spawn colliders (tight)', n);
   return n;
 }
 /** rev3：placeCar 後鎖世界位；arcade／resolve 東推即重置 */
@@ -10860,14 +10866,21 @@ Object.assign(MISSION_DB.speedboat, {
       after(1.0, () => say('喪彪', '東星太子派咗人嚟……攞到即刻帶嚟閘口。妹妹嘅病……我哋要呢筆錢。', 4.2));
       after(1.2, () => objective('暴雨深夜：去<em>八號泊位辦事處</em>打開夾萬，攞<em>冷錢包密鑰</em>。'));
     } else if (openGeneric) {
-      /* 預設 boot：任務閘開住；清 _st 延遲對白，改 pier 通用池（禁冷錢包／八號） */
+      /* BootGeneric：重接提單 beat（禁冷錢包／五億／八號）；唔淨清 seqs */
       try { seqs.length = 0; } catch (eQ) { /* */ }
       try { subsQ.length = 0; if (typeof showSub === 'function') showSub(); } catch (eS) { /* */ }
-      try { titleCard('葵涌碼頭', '摸熟埠頭'); } catch (eT) { /* */ }
+      const _bootCard = () => {
+        try {
+          if (typeof NT !== 'undefined') NT._c27fTpT = 0; /* 豁免傳送 60s 擋 titleCard */
+        } catch (e0) { /* */ }
+        try { titleCard('提單', '葵涌碼頭 · 閘口'); } catch (eT) { /* */ }
+      };
+      _bootCard();
+      try { after(2.0, _bootCard); } catch (eR) { /* */ }
       try {
-        const line = (typeof NT !== 'undefined' && typeof NT.c27fPickObj === 'function')
-          ? NT.c27fPickObj('kwai_tsing') : '喺附近行開，睇下有咩事發生。';
-        objective(line, 4);
+        after(0.6, () => say('喪彪', '阿傑，去<em>碼頭辦事處</em>夾萬攞<em>提單</em>——攞到即刻帶嚟閘口交俾我。', 4));
+        after(0.9, () => say('喪彪', '閘口等你。動作快，唔好響。', 3.2));
+        after(1.1, () => objective('去<em>碼頭辦事處</em>，打開夾萬攞<em>提單</em>。'));
       } catch (eO) { /* */ }
     } else {
       /* 存檔「新遊戲」等：保留玩法對白，唔強制冷錢包大字 */
@@ -17560,7 +17573,7 @@ const KWAI = {
   osmLayout: null,
   /* room2：公屋遠景層 y 55–100；閘 150 m 內零 estate／近閘工廈 */
   estateSkyY: 58,
-  estateGateClearM: 220
+  estateGateClearM: 200
 };
 
 function kwAtlas(mat, col, row, cols, rows) {
@@ -17954,10 +17967,65 @@ function kwQuayWallRow(parent, x0, z0, n, yaw) {
   }).catch(() => {});
   return g;
 }
+
+/** boss-p0 · 行車廊／閘 keepout 禁落櫃（hub-local）
+ *  鎖：data/core28a-kwai-driveable-vs-stack-locks.json
+ *  L0 ±6.0 GU；L1 ±6.75 GU；閘 keepout 30 GU；只准 yard／quay belt
+ */
+function kwDistPointSeg(px, pz, ax, az, bx, bz) {
+  const dx = bx - ax, dz = bz - az;
+  const len2 = dx * dx + dz * dz || 1e-9;
+  let t = ((px - ax) * dx + (pz - az) * dz) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (ax + t * dx), pz - (az + t * dz));
+}
+function kwRejectStackOnDriveable(lx, lz) {
+  try {
+    const L0 = 6.0, L1 = 6.75, keepR = 30;
+    /* hub-local 行車廊（對齊 kwYardDriveCorridorStub） */
+    const segsL0 = [
+      [-28, -100, -28, 60],
+      [-28, 55, -92, 55],
+      [-92, 55, -92, 130],
+      [-18, -90, -18, 50] /* 櫃巷亦禁實心櫃堆 */
+    ];
+    for (const s of segsL0) {
+      if (kwDistPointSeg(lx, lz, s[0], s[1], s[2], s[3]) < L0) return true;
+    }
+    /* L1 南閘／肘感（hub 近似） */
+    const segsL1 = [
+      [0, -280, 0, -200],
+      [-20, 20, -20, 50],
+      [-20, 38, -60, 70]
+    ];
+    for (const s of segsL1) {
+      if (kwDistPointSeg(lx, lz, s[0], s[1], s[2], s[3]) < L1) return true;
+    }
+    const gates = [[-20, 38], [0, -262], [-18, -150], [36, -222], [-92, 138], [-2, -271]];
+    for (const [gx, gz] of gates) {
+      if (Math.hypot(lx - gx, lz - gz) < keepR) return true;
+    }
+    /* 只准堆場／岸橋帶：x∈[12, BOUND.x+40] 或西廂工廈後 x∈[-110,-40]；禁路中 */
+    const bx = (typeof BOUND !== 'undefined' ? BOUND.x : 140);
+    const inYardEast = lx >= 12 && lx <= bx + 40;
+    const inYardWest = lx <= -40 && lx >= -110;
+    if (!inYardEast && !inYardWest) return true;
+    return false;
+  } catch (e) { return false; }
+}
+
 function kwYardStack(parent, x, z, yaw) {
+  if (typeof kwRejectStackOnDriveable === 'function' && kwRejectStackOnDriveable(x, z)) {
+    console.info('[kwai] stack reject driveable', x, z);
+    return null;
+  }
   const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = yaw || 0;
   g.userData.kwaichung = true; g.name = 'kt-yard-stack';
   parent.add(g);
+  /* 櫃要可撞——glTF 未到亦加 AABB */
+  try {
+    if (typeof addCollider === 'function') addCollider(x, z, 1.4, 3.2, 8);
+  } catch (eC) { /* */ }
   kwPortLoad('stack', KWAI_SCALE.gltf.stack).then((proto) => {
     if (!proto || !g.parent) { console.warn('[kw-port] stack empty proto'); return; }
     const cl = proto.clone(true);
@@ -18566,9 +18634,9 @@ function kwBuildThreePartStub() {
   kwProcCrane(root, bx + 27, 55, 1, -Math.PI / 2);
   kwQuayWallRow(root, bx + 2, -140, 6, 0);
   kwQuayWallRow(root, bx + 2, 40, 5, 0);
-  kwYardStack(root, -8, 60, 0.1);
-  kwYardStack(root, 6, -40, -0.05);
-  kwYardStack(root, -14, -90, 0.2);
+  kwYardStack(root, 48, 60, 0.1);
+  kwYardStack(root, 62, -40, -0.05);
+  kwYardStack(root, 54, -90, 0.2);
 
   // —— Part B CT8 hint（南／東南）——
   const partB = new THREE.Group(); partB.name = 'kt_part_b_ct8_hint'; partB.position.set(bx + 40, 0, -(typeof BOUND !== 'undefined' ? BOUND.z : 280) - 50);
@@ -21714,11 +21782,11 @@ function kwEnsureStsSpawnBoomView() {
 }
 
 function kwCullEstateNearGateSpawn() {
-  /* rev7c／gta：公屋＋格網樓＋工廈——閘／spawn／右扇；兼掃 scene */
+  /* boss-p0：只砍公屋／skyline——禁再吞 building／extrude／grid／kt_ind_block（空城根因） */
   try {
     const root = (typeof kwEnsureGroup === 'function' ? kwEnsureGroup() : null) || (typeof KWAI !== 'undefined' ? KWAI.group : null);
     if (!root || typeof THREE === 'undefined') return 0;
-    const clearM = (typeof KWAI !== 'undefined' && KWAI.estateGateClearM != null) ? KWAI.estateGateClearM : 220;
+    const clearM = (typeof KWAI !== 'undefined' && KWAI.estateGateClearM != null) ? KWAI.estateGateClearM : 200;
     const bzL = typeof BOUND !== 'undefined' ? BOUND.z : 280;
     const gates = [[-20, 38], [0, -bzL + 18], [-6, -bzL + 4], [36, -222], [-2, -bzL + 9], [20, -250]];
     const drop = [];
@@ -21726,11 +21794,11 @@ function kwCullEstateNearGateSpawn() {
     const _wp = new THREE.Vector3();
     const hx = (typeof KWAI_GEO !== 'undefined' ? KWAI_GEO.hubX : -1237);
     const hz = (typeof KWAI_GEO !== 'undefined' ? KWAI_GEO.hubZ : -145);
-    const nameRe = /kt_estate|public_housing|kt_mall|kt_ind_block|skyline|extrude|osm_bld|bldg|building|grid|ph_|estate|facade_block/i;
+    const nameRe = /kt_estate_skyline|public_housing|^kt_estate\b/i;
     const mark = (o) => {
       let cur = o;
       while (cur && cur.parent && cur.parent !== root && cur.parent !== scene) {
-        if (nameRe.test(cur.name || '')) { o = cur; break; }
+        if (nameRe.test(cur.name || '') || (cur.userData && cur.userData.skylineLayer)) { o = cur; break; }
         cur = cur.parent;
       }
       if (seen.has(o)) return;
@@ -21741,20 +21809,22 @@ function kwCullEstateNearGateSpawn() {
       node.traverse((o) => {
         if (!o) return;
         const nm = o.name || '';
-        const isPh = nameRe.test(nm) || (o.userData && (o.userData.skylineLayer || o.userData.buildingType === 'public_housing'));
-        if (!isPh && !(o.isMesh && o.geometry && nm && /block|tower|slab|mass/i.test(nm))) return;
+        const ud = o.userData || {};
+        const isPh = nameRe.test(nm) || !!(ud.skylineLayer) || ud.buildingType === 'public_housing';
+        if (!isPh) return; /* 唔再掃 mesh block|tower|slab|mass／OSM extrude */
         try { o.getWorldPosition(_wp); } catch (e) { return; }
         const lx = _wp.x - hx, lz = _wp.z - hz;
         for (const [gx, gz] of gates) {
           if (Math.hypot(lx - gx, lz - gz) < clearM) { mark(o); return; }
         }
+        /* 右扇只砍公屋，唔砍工廈／OSM */
         if (lx > 8 && lx < 180 && lz > -320 && lz < -140) mark(o);
       });
     };
     visit(root);
     try { if (typeof scene !== 'undefined' && scene !== root) visit(scene); } catch (eS) { /* */ }
     for (const o of drop) { if (o.parent) o.parent.remove(o); }
-    if (drop.length) console.info('[kwai] estate/grid cull', drop.length);
+    if (drop.length) console.info('[kwai] estate-only cull', drop.length);
     return drop.length;
   } catch (e) { return 0; }
 }
@@ -21866,13 +21936,15 @@ function kwBuildArtDensifyCore28a() {
   // —— 3. 櫃疊 3–5 block × 3 巷（只 hub 堆場；禁市區）——
   {
     let stackN = countByName(/^kt-yard-stack$/);
-    const lanes = [-18, -6, 8];
+    /* boss-p0：櫃巷離行車廊——東岸堆場帶／西廂；禁 [-18,-6,8] 路中 */
+    const lanes = lite ? [48, 66] : [42, 58, 74];
     const zBlocks = lite
       ? [-90, -20, 40, 100]
       : [-120, -60, 0, 60, 120];
     for (const lx of lanes) {
       for (const lz of zBlocks) {
         if (stackN >= (lite ? 9 : 12)) break;
+        if (typeof kwRejectStackOnDriveable === 'function' && kwRejectStackOnDriveable(lx, lz)) continue;
         let near = false;
         root.traverse((o) => {
           if (near || o.name !== 'kt-yard-stack') return;
@@ -21887,15 +21959,17 @@ function kwBuildArtDensifyCore28a() {
     // 櫃巷死巷封口（alley blocker）
     const placeBlocker = (x, z, yaw) => {
       if (typeof kwInSpawnForwardCone === 'function' && kwInSpawnForwardCone(x, z)) return;
+      if (typeof kwRejectStackOnDriveable === 'function' && kwRejectStackOnDriveable(x, z)) return;
       kwPortLoad('alleyBlocker', KWAI_SCALE.gltf.alleyBlocker).then((proto) => {
         if (!proto || !g.parent) return;
         if (typeof kwInSpawnForwardCone === 'function' && kwInSpawnForwardCone(x, z)) return;
+        if (typeof kwRejectStackOnDriveable === 'function' && kwRejectStackOnDriveable(x, z)) return;
         kwPortMount(g, proto, x, z, yaw, 'kt_alley_cont_blocker');
         stats.props++;
       }).catch(() => {});
     };
-    placeBlocker(-18, -145, 0);
-    placeBlocker(8, 145, Math.PI);
+    placeBlocker(48, -145, 0);
+    placeBlocker(66, 145, Math.PI);
   }
 
   // —— 4. 護舷／纜樁／高桅／岸吊軌（glTF densify props）——
@@ -22150,7 +22224,7 @@ function kwBuildArtDensifyCore28a() {
       const drop = [];
       const _wp = new THREE.Vector3();
       root.traverse((o) => {
-        if (!o || !o.name || !/kt_estate_skyline|public_housing|kt_ind_block/i.test(o.name)) return;
+        if (!o || !o.name || !/kt_estate_skyline|public_housing/i.test(o.name)) return;
         o.getWorldPosition(_wp);
         const hx = (typeof KWAI_GEO !== 'undefined' ? KWAI_GEO.hubX : 0);
         const hz = (typeof KWAI_GEO !== 'undefined' ? KWAI_GEO.hubZ : 0);
@@ -27724,10 +27798,10 @@ body.cine #c27Dist,body.cine #c27Wanted,body.cine #c27Horn{visibility:hidden}`;
     newtown: ['入商場平台再上屋苑，地面街好靜。', '巴士總站喺平台底，跟指示行。'],
     /* hkzone=kwai 探索：通用句，禁自動冷錢包／八號泊位 */
     pier: [
-      '喺附近行開，睇下有咩事發生。',
+      '去<em>碼頭辦事處</em>，打開夾萬攞<em>提單</em>。',
+      '攞到提單之後去<em>閘口</em>交收。',
       '沿住岸線行，睇下吊機同堆場。',
-      '跟住行車廊行一圈，摸熟碼頭。',
-      '有訊號就接；冇就當埠頭逛。'
+      '跟住行車廊行一圈，摸熟碼頭。'
     ]
   };
   NT.c27fPickObj = function (id) {
@@ -27749,11 +27823,21 @@ body.cine #c27Dist,body.cine #c27Wanted,body.cine #c27Horn{visibility:hidden}`;
   };
   NT.c27fSanitizeObj = function (text) {
     const raw = String(text || '');
+    /* BootGeneric getBol／deliver：保留提單／閘口／辦事處；只剝冷錢包／八號／五億 */
+    try {
+      if (typeof MS !== 'undefined' && MS.id === 'manifest' && (MS.phase === 'getBol' || MS.phase === 'deliver' || MS.phase === 'toGate') && NT._c27fBootGenericManifest) {
+        if (/冷錢包|八號泊位|五億/.test(raw)) {
+          return '去<em>碼頭辦事處</em>，打開夾萬攞<em>提單</em>。';
+        }
+        if (/提單|閘口|辦事處/.test(raw)) return text;
+      }
+    } catch (eBol) { /* */ }
     if (!/冷錢包|八號泊位|葵涌貨櫃|衝出葵涌/.test(raw)) return text;
     // hkzone=kwai 探索／開場通用 boot：未顯式 ?m=manifest 前，一律換通用句
     try {
       const mq = (typeof URLQ !== 'undefined' && URLQ.get) ? URLQ.get('m') : null;
       const accepted = (typeof MS !== 'undefined' && !!MS.id && !NT._c27fBootGenericManifest && !NT._c27fKwaiExploreOnly);
+      if (NT._c27fBootGenericManifest && typeof MS !== 'undefined' && MS.id === 'manifest' && /提單|閘口|辦事處/.test(raw) && !/冷錢包|八號/.test(raw)) return text;
       if ((NT._c27fKwaiExploreOnly || NT._c27fBootGenericManifest) && !accepted) return NT.c27fPickObj(NT._c27fLastGoId || 'kwai_tsing');
     } catch (e0) { /* */ }
     try {
@@ -27811,7 +27895,11 @@ body.cine #c27Dist,body.cine #c27Wanted,body.cine #c27Horn{visibility:hidden}`;
     if (typeof titleCard === 'function' && !titleCard._c27f) {
       const _tc = titleCard; titleCard = function (name, sub, sec) {
         const blob = String(name) + ' ' + String(sub || '');
-        if (NT._c27fTpT && performance.now() - NT._c27fTpT < 60000) return;
+        if (NT._c27fTpT && performance.now() - NT._c27fTpT < 60000) {
+          /* BootGeneric／提單字卡豁免 60s 擋；冷錢包仍擋 */
+          const bootOk = !!(NT._c27fBootGenericManifest) && /提單|閘口|葵涌碼頭/.test(blob) && !/冷錢包|八號泊位|五億/.test(blob);
+          if (!bootOk) return;
+        }
         if (/冷錢包|八號泊位|葵涌貨櫃|衝出葵涌/.test(blob)) {
           try {
             const mq = (typeof URLQ !== 'undefined' && URLQ.get) ? URLQ.get('m') : null;

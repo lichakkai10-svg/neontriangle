@@ -1,0 +1,32 @@
+{
+  "project": "neon-triangle",
+  "id": "core28a-kwai-access-elevated-locks",
+  "updated": "2026-11-07T18:10:00+08:00",
+  "for_version": "core28a",
+  "gates": [
+    {
+      "id": "kt_gate_a_weigh",
+      "x": -1513.4,
+      "z": -3018.7,
+      "role": "gate_A"
+    },
+    {
+      "id": "kt_gate_b_weigh",
+      "x": -1312.7,
+      "z": -2156.2,
+      "role": "gate_B"
+    },
+    {
+      "id": "kt_shore_yard_anchor",
+      "x": -1776.0,
+      "z": -2736.7,
+      "role": "prologue_40m"
+    }
+  ],
+  "elevated_L2": [
+    "kt_l2_tsing_kwai",
+    "kt_l2_ramp_hint"
+  ],
+  "note_zh": "高架只剪影；閘 keepout 30GU 禁櫃堆",
+  "align_bake": "data/core28a-kwai-terminal-hkgeo-bake.json"
+}

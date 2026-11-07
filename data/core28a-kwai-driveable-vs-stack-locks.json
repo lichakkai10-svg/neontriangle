@@ -1,0 +1,94 @@
+{
+  "project": "neon-triangle",
+  "id": "core28a-kwai-driveable-vs-stack-locks",
+  "updated": "2026-11-07T18:10:00+08:00",
+  "for_version": "core28a",
+  "priority": "P0",
+  "tip": "room2-boss-p0-collide-cont-bld-story",
+  "rules": {
+    "L1_half_gu": 6.75,
+    "L0_half_gu": 6.0,
+    "gate_keepout_gu": 30,
+    "gate_keepout_m": 20,
+    "stack_zones": [
+      "yard_kc",
+      "crane_strip_kc"
+    ],
+    "zero_stacks_on": [
+      "L1_centerline",
+      "L0_corridor",
+      "gate_keepout"
+    ]
+  },
+  "gates_world_bake": {
+    "kt_gate_a_weigh": {
+      "x": -1513.4,
+      "z": -3018.7
+    },
+    "kt_gate_b_weigh": {
+      "x": -1312.7,
+      "z": -2156.2
+    },
+    "kt_shore_yard_anchor_prologue": {
+      "x": -1776.0,
+      "z": -2736.7
+    }
+  },
+  "hub_local_corridor_segs_L0": [
+    [
+      -28,
+      -100,
+      -28,
+      60
+    ],
+    [
+      -28,
+      55,
+      -92,
+      55
+    ],
+    [
+      -92,
+      55,
+      -92,
+      130
+    ],
+    [
+      -18,
+      -90,
+      -18,
+      50
+    ]
+  ],
+  "hub_local_gates_keepout": [
+    [
+      -20,
+      38
+    ],
+    [
+      0,
+      -262
+    ],
+    [
+      -18,
+      -150
+    ],
+    [
+      36,
+      -222
+    ],
+    [
+      -92,
+      138
+    ],
+    [
+      -2,
+      -271
+    ]
+  ],
+  "enforce": "kwRejectStackOnDriveable(lx,lz) in index.html",
+  "align_docs": [
+    "docs/core28a-kwai-driveable-vs-stack-locks.md",
+    "data/core28a-kwai-terminal-hkgeo-bake.json"
+  ]
+}
